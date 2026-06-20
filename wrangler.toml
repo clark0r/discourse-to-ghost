@@ -17,7 +17,7 @@ PUBLISH_TAG = "spotlight"
 # then paste the returned id below.
 [[kv_namespaces]]
 binding = "SYNCED_TOPICS"
-id = "6de0104142104dae8f859a48ea470078"
+id = "YOUR-TOPIC-ID-HERE"
 
 # Secrets are NOT set here. Set them with:
 #   wrangler secret put DISCOURSE_WEBHOOK_SECRET
