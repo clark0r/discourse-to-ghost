@@ -1,0 +1,26 @@
+name = "discourse-to-ghost"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+
+# Non-secret configuration. Edit these for your actual domains.
+[vars]
+DISCOURSE_BASE_URL = "https://forum.0x00sec.org"
+GHOST_BASE_URL = "https://0x00sec.org"
+PUBLISH_TAG = "spotlight"
+
+# Workers KV namespace used to track which Discourse topic IDs have
+# already been synced to Ghost, so re-edits/re-deliveries don't create
+# duplicate drafts.
+#
+# Create it first with:
+#   wrangler kv:namespace create SYNCED_TOPICS
+# then paste the returned id below.
+[[kv_namespaces]]
+binding = "SYNCED_TOPICS"
+id = "6de0104142104dae8f859a48ea470078"
+
+# Secrets are NOT set here. Set them with:
+#   wrangler secret put DISCOURSE_WEBHOOK_SECRET
+#   wrangler secret put DISCOURSE_API_KEY
+#   wrangler secret put GHOST_ADMIN_API_KEY
+#   wrangler secret put DISCOURSE_API_USERNAME   (optional, defaults to "system")

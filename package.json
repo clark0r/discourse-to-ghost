@@ -1,0 +1,15 @@
+{
+  "name": "discourse-to-ghost",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker that publishes Discourse topics tagged \"publish\" as Ghost drafts.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.103.0"
+  }
+}
