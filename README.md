@@ -10,7 +10,7 @@ for a human to review, format, and hit Publish on.
 
 ## How it works
 
-1. You tag a Discourse topic with `publish`.
+1. You tag a Discourse topic with `spotlight`.
 2. Discourse fires a webhook to this Worker.
 3. The Worker verifies the webhook signature, checks the tag, and checks
    Workers KV to make sure this topic hasn't already been synced.
