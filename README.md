@@ -1,10 +1,7 @@
 # discourse-to-ghost
 
-Cloudflare Worker that watches for Discourse topics tagged `publish` and
-creates a matching Ghost **draft** post automatically.
-
-Nothing ever auto-publishes — every synced topic lands in Ghost as a draft
-for a human to review, format, and hit Publish on.
+Cloudflare Worker that watches for Discourse topics tagged `spotlight` and
+publishes a matching Ghost post automatically, then announces it on Bluesky.
 
 ---
 
@@ -15,10 +12,12 @@ for a human to review, format, and hit Publish on.
 3. The Worker verifies the webhook signature, checks the tag, and checks
    Workers KV to make sure this topic hasn't already been synced.
 4. If it's new, the Worker fetches the full topic from the Discourse API,
-   converts the Markdown body to HTML, and creates a draft post in Ghost
+   converts the Markdown body to HTML, and publishes a post in Ghost
    via the Admin API.
-5. The topic ID is recorded in KV so editing the topic later (which
-   re-fires the webhook) won't create a second draft.
+5. If Bluesky credentials are configured, the Worker posts to Bluesky
+   with the topic title, author, hashtags, and a link to the Ghost post.
+6. The topic ID is recorded in KV so editing the topic later (which
+   re-fires the webhook) won't create a duplicate.
 
 ---
 
@@ -63,13 +62,46 @@ same value into Discourse's webhook config in the next step.
 correct for global API keys. Only set it if your key is scoped to a
 specific user.
 
-### 5. Edit `wrangler.toml` vars
+### 5. (Optional) Set up Bluesky social posting
+
+If you want new posts announced on Bluesky automatically:
+
+1. Create an app password at [bsky.app/settings/app-passwords](https://bsky.app/settings/app-passwords)
+2. Set the secrets:
+
+```bash
+npx wrangler secret put BLUESKY_IDENTIFIER       # your handle, e.g. "yourbot.bsky.social"
+npx wrangler secret put BLUESKY_APP_PASSWORD      # the app password you just created
+```
+
+The Worker will post something like:
+
+> "Topic Title" by AuthorName
+>
+> #infosec #cybersec #hacking
+
+...with a link card pointing to the Ghost post URL.
+
+To customise the hashtags, set `SOCIAL_HASHTAGS` in `wrangler.toml` as a
+comma-separated list (without `#`):
+
+```toml
+SOCIAL_HASHTAGS = "infosec,cybersec,hacking"
+```
+
+If you're using a self-hosted PDS instead of `bsky.social`, also set
+`BLUESKY_SERVICE_URL` in `wrangler.toml`.
+
+If you skip this step entirely the Worker just won't post to Bluesky —
+the Ghost publishing works the same either way.
+
+### 6. Edit `wrangler.toml` vars
 
 Update `DISCOURSE_BASE_URL` and `GHOST_BASE_URL` if they differ from the
 defaults already in the file. `PUBLISH_TAG` defaults to `publish` — change
 it if you'd rather use a different tag name.
 
-### 6. Deploy
+### 7. Deploy
 
 ```bash
 npx wrangler deploy
@@ -78,7 +110,7 @@ npx wrangler deploy
 This prints your Worker URL, e.g. `https://discourse-to-ghost.<you>.workers.dev`.
 The webhook endpoint is that URL plus `/discourse-hook`.
 
-### 7. Configure the Discourse webhook
+### 8. Configure the Discourse webhook
 
 In Discourse Admin: **API → Webhooks → New Webhook**.
 
@@ -99,14 +131,14 @@ confirms the connection and signature verification both work.
 ## Using it
 
 Tag any topic with `publish`. Within a few seconds it should appear in
-**Ghost Admin → Posts** as a draft, with the original Discourse content
-converted to HTML and an attribution line linking back to the forum
-thread.
+**Ghost Admin → Posts** as a published post, with the original Discourse
+content converted to HTML and an attribution line linking back to the
+forum thread. If Bluesky is configured, a social post goes out with the
+Ghost link.
 
 Edit the topic again later (e.g. fix a typo) and the webhook re-fires, but
-the Worker sees the topic ID already in KV and skips it — it won't touch
-the Ghost draft a second time. If you genuinely want to re-sync a topic
-(say, you want to pull in edits before the draft is published), delete its
+the Worker sees the topic ID already in KV and skips it — it won't create
+a duplicate. If you genuinely want to re-sync a topic, delete its
 entry from KV:
 
 ```bash
@@ -121,8 +153,8 @@ npx wrangler kv:key delete --binding=SYNCED_TOPICS "topic:<id>"
   handles headings, bold/italic, links, inline code, and fenced code
   blocks, which covers what 0x00sec posts typically use. It does **not**
   handle Discourse-specific markup like polls, oneboxes, or quoted-reply
-  blocks. If a tagged topic uses those, the draft will need manual cleanup
-  before publishing — which is exactly what the draft step is for.
+  blocks. If a tagged topic uses those, the published post may need manual
+  cleanup in Ghost afterward.
 - **Single-post sync only.** This pulls the topic's first post, not the
   full thread. If you want a "thread digest" style sync instead, that's a
   different conversion function in `convert.js` — happy to add it if you

@@ -13,7 +13,7 @@
  * Docs: https://ghost.org/docs/admin-api/#token-authentication
  */
 
-export async function createGhostDraft({ baseUrl, adminApiKey, post }) {
+export async function createGhostPost({ baseUrl, adminApiKey, post }) {
   const token = await signGhostJwt(adminApiKey);
 
   const url = `${baseUrl.replace(/\/$/, "")}/ghost/api/admin/posts/?source=html`;

@@ -11,7 +11,7 @@
  * having to reimplement Ghost's card schema. The tradeoff: editors won't
  * get fully native Ghost cards (e.g. a real "code card") — everything
  * lands as one HTML block they can still edit by hand afterward, which
- * is appropriate for a draft pending human review.
+ * is appropriate since posts can still be edited in Ghost after publishing.
  *
  * Code block handling: Discourse stores raw Markdown with standard
  * ```lang fenced blocks. We convert those to <pre><code> manually rather
@@ -37,7 +37,7 @@ export function discourseTopicToGhostPost(topic, { discourseBaseUrl }) {
   return {
     title: topic.title,
     html: `${html}\n${attributionFooter}`,
-    status: "draft",
+    status: "published",
     tags: [...topic.tags, "from-forum"],
     custom_excerpt: undefined, // let Ghost auto-generate; set manually if you want
     meta_title: topic.title,

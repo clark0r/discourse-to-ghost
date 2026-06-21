@@ -8,6 +8,12 @@ DISCOURSE_BASE_URL = "https://forum.0x00sec.org"
 GHOST_BASE_URL = "https://0x00sec.org"
 PUBLISH_TAG = "spotlight"
 
+# Bluesky social posting (optional).
+# Hashtags to append to the Bluesky post (comma-separated, without #).
+SOCIAL_HASHTAGS = "infosec,cybersec,hacking"
+# Uncomment to use a self-hosted PDS instead of bsky.social:
+# BLUESKY_SERVICE_URL = "https://bsky.social"
+
 # Workers KV namespace used to track which Discourse topic IDs have
 # already been synced to Ghost, so re-edits/re-deliveries don't create
 # duplicate drafts.
@@ -24,3 +30,7 @@ id = "YOUR-TOPIC-ID-HERE"
 #   wrangler secret put DISCOURSE_API_KEY
 #   wrangler secret put GHOST_ADMIN_API_KEY
 #   wrangler secret put DISCOURSE_API_USERNAME   (optional, defaults to "system")
+#
+# Bluesky (optional — omit to disable social posting):
+#   wrangler secret put BLUESKY_IDENTIFIER       (handle, e.g. "yourbot.bsky.social")
+#   wrangler secret put BLUESKY_APP_PASSWORD      (app password from bsky.app/settings/app-passwords)

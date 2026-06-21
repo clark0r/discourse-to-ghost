@@ -2,7 +2,7 @@
  * discourse-to-ghost
  *
  * Cloudflare Worker that listens for Discourse webhooks and creates a
- * Ghost draft post whenever a topic is tagged "publish".
+ * Ghost post whenever a topic is tagged "publish".
  *
  * Flow:
  *   1. Discourse fires a webhook on post/topic events.
@@ -10,7 +10,7 @@
  *   3. We check whether the topic's tag list includes PUBLISH_TAG.
  *   4. We check Workers KV to see if this topic has already been synced.
  *   5. If new, fetch the full topic from the Discourse API, convert it,
- *      and POST it to Ghost as a draft via the Admin API.
+ *      and POST it to Ghost via the Admin API.
  *   6. Record the topic ID in KV so re-edits don't create duplicates.
  *
  * Required secrets (set via `wrangler secret put <NAME>`):
@@ -31,7 +31,8 @@
 import { verifyDiscourseSignature } from "./verifySignature.js";
 import { fetchTopic } from "./discourse.js";
 import { discourseTopicToGhostPost } from "./convert.js";
-import { createGhostDraft } from "./ghost.js";
+import { createGhostPost } from "./ghost.js";
+import { postToBluesky } from "./bluesky.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -109,7 +110,7 @@ export default {
         discourseBaseUrl: env.DISCOURSE_BASE_URL,
       });
 
-      const ghostPost = await createGhostDraft({
+      const ghostPost = await createGhostPost({
         baseUrl: env.GHOST_BASE_URL,
         adminApiKey: env.GHOST_ADMIN_API_KEY,
         post: ghostPostPayload,
@@ -120,8 +121,40 @@ export default {
         // Keep forever; remove this if you want KV to expire entries.
       });
 
+      // Post to Bluesky if credentials are configured.
+      // Failures here are logged but don't fail the webhook — the Ghost
+      // post (the primary action) already succeeded.
+      let bskyResult = null;
+      if (env.BLUESKY_IDENTIFIER && env.BLUESKY_APP_PASSWORD) {
+        try {
+          const hashtags = (env.SOCIAL_HASHTAGS || "infosec,cybersec,hacking")
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean);
+
+          const postUrl = ghostPost.url || `${env.GHOST_BASE_URL}/${ghostPost.slug}/`;
+
+          bskyResult = await postToBluesky({
+            identifier: env.BLUESKY_IDENTIFIER,
+            appPassword: env.BLUESKY_APP_PASSWORD,
+            serviceUrl: env.BLUESKY_SERVICE_URL,
+            topic,
+            postUrl,
+            hashtags,
+          });
+        } catch (bskyErr) {
+          console.error("Bluesky post failed (non-fatal):", bskyErr);
+        }
+      }
+
+      const bskyMsg = bskyResult
+        ? `, Bluesky post ${bskyResult.uri}`
+        : env.BLUESKY_IDENTIFIER
+          ? ", Bluesky post failed (see logs)"
+          : "";
+
       return new Response(
-        `OK: created Ghost draft ${ghostPost.id} for topic ${topicId}`,
+        `OK: published Ghost post ${ghostPost.id} for topic ${topicId}${bskyMsg}`,
         { status: 200 }
       );
     } catch (err) {
