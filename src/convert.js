@@ -22,7 +22,7 @@
 
 export function discourseTopicToGhostPost(topic, { discourseBaseUrl }) {
   const html = topic.raw
-    ? markdownToHtml(topic.raw)
+    ? markdownToHtml(topic.raw, discourseBaseUrl)
     : topic.cookedHtml ?? "";
 
   const attributionFooter = `
@@ -55,7 +55,7 @@ export function discourseTopicToGhostPost(topic, { discourseBaseUrl }) {
  * oneboxes), swap this out for a proper library — `markdown-it` works
  * fine in Workers since it's pure JS with no Node-only APIs.
  */
-function markdownToHtml(markdown) {
+function markdownToHtml(markdown, discourseBaseUrl = "") {
   const codeBlocks = [];
 
   // Pull out fenced code blocks first and replace with placeholders so
@@ -86,6 +86,19 @@ function markdownToHtml(markdown) {
   // Bold and italics (do bold before italics so **x** isn't caught by *x*)
   working = working.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   working = working.replace(/\*(.+?)\*/g, "<em>$1</em>");
+
+  // Images ![alt](url) — must run before links so ![...](url) isn't
+  // partially matched as a link. Relative /uploads/... paths are resolved
+  // against discourseBaseUrl.
+  working = working.replace(
+    /!\[([^\]]*)\]\(([^)]+)\)/g,
+    (_m, alt, url) => {
+      const src = /^https?:\/\//.test(url)
+        ? url
+        : `${discourseBaseUrl}/${url.replace(/^\//, "")}`;
+      return `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`;
+    }
+  );
 
   // Links [text](url)
   working = working.replace(

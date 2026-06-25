@@ -33,6 +33,8 @@ import { fetchTopic } from "./discourse.js";
 import { discourseTopicToGhostPost } from "./convert.js";
 import { createGhostPost } from "./ghost.js";
 import { postToBluesky } from "./bluesky.js";
+import { postToTwitter } from "./twitter.js";
+import { postToDiscord } from "./discord.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -96,12 +98,30 @@ export default {
         apiUsername: env.DISCOURSE_API_USERNAME || "system",
       });
 
-      const publishTag = env.PUBLISH_TAG || "publish";
+      // Announce all new topics to Discord regardless of publish tag,
+      // but skip system messages (e.g. welcome topics, automated notices).
+    const discourseEvent = request.headers.get("X-Discourse-Event");
+    let discordResult = null;
+    const isSystemMessage = topic.author?.username === "system";
+    if (discourseEvent === "topic_created" && env.DISCORD_WEBHOOK_URL && !isSystemMessage) {
+      try {
+        discordResult = await postToDiscord({
+          webhookUrl: env.DISCORD_WEBHOOK_URL,
+          topic,
+          notifRoleId: env.DISCORD_NOTIF_ROLE_ID,
+        });
+      } catch (discordErr) {
+        console.error("Discord announcement failed (non-fatal):", discordErr);
+      }
+    }
+
+    const publishTag = env.PUBLISH_TAG || "publish";
       const tags = (topic.tags ?? []).map((t) =>
         typeof t === "string" ? t : t.name
       );
       if (!tags.includes(publishTag)) {
-        return new Response("Ignored: not tagged for publishing", {
+        const discordNote = discordResult ? " (Discord announced)" : "";
+        return new Response(`Ignored: not tagged for publishing${discordNote}`, {
           status: 200,
         });
       }
@@ -124,28 +144,56 @@ export default {
       // Post to Bluesky if credentials are configured.
       // Failures here are logged but don't fail the webhook — the Ghost
       // post (the primary action) already succeeded.
+      const postUrl = ghostPost.url || `${env.GHOST_BASE_URL}/${ghostPost.slug}/`;
+      const socialHashtags = (env.SOCIAL_HASHTAGS || "infosec,cybersec,hacking")
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+
       let bskyResult = null;
       if (env.BLUESKY_IDENTIFIER && env.BLUESKY_APP_PASSWORD) {
         try {
-          const hashtags = (env.SOCIAL_HASHTAGS || "infosec,cybersec,hacking")
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean);
-
-          const postUrl = ghostPost.url || `${env.GHOST_BASE_URL}/${ghostPost.slug}/`;
-
           bskyResult = await postToBluesky({
             identifier: env.BLUESKY_IDENTIFIER,
             appPassword: env.BLUESKY_APP_PASSWORD,
             serviceUrl: env.BLUESKY_SERVICE_URL,
             topic,
             postUrl,
-            hashtags,
+            hashtags: socialHashtags,
           });
         } catch (bskyErr) {
           console.error("Bluesky post failed (non-fatal):", bskyErr);
         }
       }
+
+      // Post to Twitter/X if credentials are configured.
+      let twitterResult = null;
+      if (
+        env.TWITTER_API_KEY &&
+        env.TWITTER_API_SECRET &&
+        env.TWITTER_ACCESS_TOKEN &&
+        env.TWITTER_ACCESS_TOKEN_SECRET
+      ) {
+        try {
+          twitterResult = await postToTwitter({
+            apiKey: env.TWITTER_API_KEY,
+            apiSecret: env.TWITTER_API_SECRET,
+            accessToken: env.TWITTER_ACCESS_TOKEN,
+            accessTokenSecret: env.TWITTER_ACCESS_TOKEN_SECRET,
+            topic,
+            postUrl,
+            hashtags: socialHashtags,
+          });
+        } catch (twitterErr) {
+          console.error("Twitter post failed (non-fatal):", twitterErr);
+        }
+      }
+
+      const discordMsg = discordResult
+        ? ", Discord announced"
+        : env.DISCORD_WEBHOOK_URL && discourseEvent === "topic_created"
+          ? ", Discord announcement failed (see logs)"
+          : "";
 
       const bskyMsg = bskyResult
         ? `, Bluesky post ${bskyResult.uri}`
@@ -153,8 +201,14 @@ export default {
           ? ", Bluesky post failed (see logs)"
           : "";
 
+      const twitterMsg = twitterResult
+        ? `, Twitter post ${twitterResult.data?.id}`
+        : env.TWITTER_API_KEY
+          ? ", Twitter post failed (see logs)"
+          : "";
+
       return new Response(
-        `OK: published Ghost post ${ghostPost.id} for topic ${topicId}${bskyMsg}`,
+        `OK: published Ghost post ${ghostPost.id} for topic ${topicId}${discordMsg}${bskyMsg}${twitterMsg}`,
         { status: 200 }
       );
     } catch (err) {

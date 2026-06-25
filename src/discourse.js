@@ -23,6 +23,7 @@ export async function fetchTopic({ baseUrl, topicId, apiKey, apiUsername }) {
   }
 
   const data = await res.json();
+  const base = baseUrl.replace(/\/$/, "");
 
   const firstPost = data.post_stream?.posts?.[0];
   if (!firstPost) {
@@ -38,9 +39,16 @@ export async function fetchTopic({ baseUrl, topicId, apiKey, apiUsername }) {
     author: {
       username: firstPost.username,
       name: firstPost.name,
+      avatarUrl: resolveAvatar(base, firstPost.avatar_template, 64),
     },
     raw: firstPost.raw ?? null,
     cookedHtml: firstPost.cooked ?? null,
-    topicUrl: `${baseUrl.replace(/\/$/, "")}/t/${data.slug}/${data.id}`,
+    topicUrl: `${base}/t/${data.slug}/${data.id}`,
   };
+}
+
+function resolveAvatar(base, template, size) {
+  if (!template) return null;
+  const path = template.replace(/\{size\}/, size);
+  return path.startsWith("http") ? path : `${base}${path}`;
 }
