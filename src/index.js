@@ -102,8 +102,9 @@ export default {
       // but skip system messages (e.g. welcome topics, automated notices).
     const discourseEvent = request.headers.get("X-Discourse-Event");
     let discordResult = null;
+    const isRegularTopic = topic.archetype === "regular";
     const isSystemMessage = topic.author?.username === "system";
-    if (discourseEvent === "topic_created" && env.DISCORD_WEBHOOK_URL && !isSystemMessage) {
+    if (discourseEvent === "topic_created" && env.DISCORD_WEBHOOK_URL && isRegularTopic && !isSystemMessage) {
       try {
         discordResult = await postToDiscord({
           webhookUrl: env.DISCORD_WEBHOOK_URL,

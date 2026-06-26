@@ -34,6 +34,8 @@ export async function fetchTopic({ baseUrl, topicId, apiKey, apiUsername }) {
     id: data.id,
     title: data.title,
     slug: data.slug,
+    archetype: data.archetype,
+    categoryId: data.category_id,
     tags: (data.tags ?? []).map((t) => (typeof t === "string" ? t : t.name)),
     createdAt: data.created_at,
     author: {
